@@ -1,11 +1,126 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+// Packages Imports
+import { useEffect, useState } from "react";
+import { StatusBar } from "expo-status-bar";
+import { StyleSheet, View, Button } from "react-native";
+import * as Notifications from "expo-notifications";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => {
+    return {
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      shouldShowAlert: true,
+    };
+  },
+});
 
 export default function App() {
+  const [pushToken, setPushToken] = useState("");
+
+  // Configuring Push Notifications
+  useEffect(() => {
+    const configurePushNotifications = async () => {
+      const { status } = await Notifications.getPermissionsAsync();
+      let finalStatus = status;
+
+      if (finalStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== "granted") {
+        Alert.alert(
+          "Permission required",
+          "Push notifications need the appropriate permissions."
+        );
+        return;
+      }
+
+      const pushTokenData = await Notifications.getExpoPushTokenAsync();
+      setPushToken(pushTokenData?.data);
+      console.log("Push Token", pushTokenData);
+
+      if (Platform.OS === "android") {
+        Notifications.setNotificationChannelAsync("default", {
+          name: "default",
+          importance: Notifications.AndroidImportance.DEFAULT,
+        });
+      }
+    };
+
+    configurePushNotifications();
+  }, []);
+
+  // Handling Click on the Local Notification
+  useEffect(() => {
+    const subscription1 = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        console.log("NOTIFICATION RECEIVED");
+        console.log(notification);
+        const userName = notification.request.content.data.userName;
+        console.log("Username -", userName);
+      }
+    );
+
+    const subscription2 = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        console.log("NOTIFICATION RESPONSE RECEIVED");
+        console.log(response);
+        const userName = response.notification.request.content.data.userName;
+        console.log("Username -", userName);
+      }
+    );
+
+    return () => {
+      subscription1.remove();
+      subscription2.remove();
+    };
+  }, []);
+
+  // Schedule Local Notification
+  const handleNotificationScheduler = () => {
+    Notifications.scheduleNotificationAsync({
+      content: {
+        title: "My first local notification",
+        body: "This is the body of the notification.",
+        data: { userName: "Divyankar" },
+      },
+      trigger: {
+        seconds: 5,
+      },
+    });
+  };
+
+  // Sending Push Notification
+  const handleSendPushNotification = () => {
+    fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: pushToken,
+        title: "Test - sent from a device!",
+        body: "This is a test!",
+      }),
+    });
+  };
+
   return (
     <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
+      <StatusBar style='auto' />
+      <View style={styles.buttonContainer}>
+        <Button
+          title='Schedule Notification'
+          onPress={handleNotificationScheduler}
+        />
+      </View>
+      <View style={styles.buttonContainer}>
+        <Button
+          title='Send Push Notification'
+          onPress={handleSendPushNotification}
+        />
+      </View>
     </View>
   );
 }
@@ -13,8 +128,11 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonContainer: {
+    marginVertical: 8,
   },
 });
